@@ -1,33 +1,20 @@
-.PHONY: all test build clean clean-all
+.PHONY: all clean-all build build-nonstatic
 
-all: clean test build
+all: clean-all build 
 
-LEVEL ?= "info"
-TEST ?= ""
+build:
+	RUSTFLAGS="-C target-feature=+crt-static -Clink-arg=-fuse-ld=lld" cargo build --target x86_64-unknown-linux-gnu --release --verbose
 
-build-dev: clean 
-	cargo build
-
-build: clean
+build-nonstatic:
 	cargo build --release
 
-test: clean
-	CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test  -- --nocapture
+verify:
+	cargo clippy --all-targets --all-features
 
-test-by-name: clean
-	CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test $(TEST) -- --nocapture
-
-cover:
-	mkdir -p assets
-	grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" --ignore "src/main.rs" --ignore "src/api/*"  -o target/coverage/html
-	cp target/coverage/html/html/badges/flat.svg assets/
-
-run:
-	cargo run 
-
-clean:
-	rm -rf cargo-test*
+fmt: 
+	rustfmt --check src/*.rs --edition 2024
 
 clean-all:
 	rm -rf cargo-test*
 	cargo clean
+	rm -rf ./target/debug

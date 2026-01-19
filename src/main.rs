@@ -1,115 +1,85 @@
-use http::StatusCode;
-use http_body_util::*;
-use hyper::body::Bytes;
-use hyper::header::CONTENT_TYPE;
-use hyper::server::conn::http1;
+use crate::config::load::{ConfigInterface, ImplConfigInterface};
+use crate::handlers::service::endpoints;
+use custom_logger as log;
+// use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{HeaderMap, Method};
-use hyper::{Request, Response};
-use hyper_util::rt::TokioIo;
-use std::convert::Infallible;
-use std::fs;
-use std::net::SocketAddr;
-use surrealkv::{Tree, TreeBuilder};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder;
+use mimalloc::MiMalloc;
+use std::collections::HashMap;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Mutex;
 use tokio::net::TcpListener;
 
-async fn markdown(
-    req: Request<hyper::body::Incoming>,
-) -> Result<Response<Full<Bytes>>, Infallible> {
-    let mut response = Response::new(Full::default());
-    match req.method() {
-        &Method::GET => {
-            let req_uri = req.uri().to_string();
-            let params: Vec<&str> = req_uri.split("/").collect();
-            let key = params.last().unwrap().to_string();
-            let result = db_read(key.clone()).await;
-            match result {
-                Ok(document) => {
-                    fs::write(format!("./{}.md", key), document.clone())
-                        .expect("should write file");
-                    let mut headers = HeaderMap::new();
-                    headers.insert(CONTENT_TYPE, "text/markdown".parse().unwrap());
-                    *response.headers_mut() = headers;
-                    *response.body_mut() = Full::from(document.to_string());
-                }
-                Err(e) => {
-                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    *response.body_mut() =
-                        Full::from(format!("could no read db {}", e.to_string()));
-                }
-            }
-        }
-        _ => {
-            *response.status_mut() = StatusCode::NOT_FOUND;
+mod config;
+mod handlers;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+// used for lookup in read mode only
+static MAP_LOOKUP: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+fn main() {
+    // read and parse config
+    // for documents 'config/application-config.json'
+    let impl_config = ImplConfigInterface {};
+    let res_params = impl_config.read("config/application-config.json".to_string());
+    let parameters = match res_params {
+        Ok(params) => params,
+        Err(e) => {
+            log::error!("{:?}", e.to_string());
+            std::process::exit(1);
         }
     };
-    Ok(response)
-}
 
-// used for http2
-#[derive(Clone)]
-pub struct TokioExecutor;
+    let level = match parameters.log_level.as_str() {
+        "warn" => log::LevelFilter::Warn,
+        "debug" => log::LevelFilter::Debug,
+        "trace" => log::LevelFilter::Trace,
+        &_ => log::LevelFilter::Trace,
+    };
 
-impl<F> hyper::rt::Executor<F> for TokioExecutor
-where
-    F: std::future::Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    fn execute(&self, fut: F) {
-        tokio::task::spawn(fut);
+    // setup logging
+    if let Err(e) = log::Logging::new().with_level(level).init() {
+        // log is broken so use eprintln!
+        eprintln!("[main] error {}", e);
+        std::process::exit(1);
     }
-}
 
-pub fn get_error(msg: String) -> Box<dyn std::error::Error> {
-    Box::from(format!("{}", msg.to_lowercase()))
-}
+    // parameters used in service
+    let mut hm: HashMap<String, String> = HashMap::new();
+    hm.insert("db_path".to_owned(), parameters.db_path.to_owned());
+    *MAP_LOOKUP.lock().unwrap() = Some(hm.clone());
 
-pub fn get_opts() -> Result<Tree, Box<dyn std::error::Error>> {
-    let tree = TreeBuilder::new()
-        .with_path(format!("{}.kv", "/home/lzuccarelli/database/documents").into())
-        .with_max_memtable_size(100 * 1024 * 1024)
-        .with_block_size(4096)
-        .with_level_count(1);
-    let t = tree.build()?;
-    println!("[get_opts] tree built");
-    Ok(t)
-}
+    log::info!("application : {}", env!("CARGO_PKG_NAME"));
+    log::info!("author      : {}", env!("CARGO_PKG_AUTHORS"));
+    log::info!("version     : {}", env!("CARGO_PKG_VERSION"));
 
-async fn db_read(key: String) -> Result<String, Box<dyn std::error::Error>> {
-    let tree = get_opts()?;
-    // start transaction
-    let mut txn = tree.begin().map_err(|e| get_error(e.to_string()))?;
-    let b_key = Bytes::from(key.clone());
-    let res = txn.get(&b_key).map_err(|e| get_error(e.to_string()))?;
-    // commit transaction
-    txn.commit().await?;
-    tree.close().await?;
-    match res {
-        Some(val) => {
-            let document = String::from_utf8(val.to_vec())?;
-            Ok(document)
-        }
-        None => {
-            let msg = format!("no document found with key {}", key);
-            println!("{}", msg);
-            Err(get_error(msg))
+    let result = run_server(parameters.server_port);
+    match result {
+        Ok(_) => log::info!("[main] server shutdown successfully"),
+        Err(err) => {
+            log::error!("{}", err);
+            std::process::exit(1);
         }
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+pub async fn run_server(port: usize) -> Result<(), Box<dyn std::error::Error>> {
+    let addr = SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), port as u16);
+    log::info!("[run_server] starting to serve on http://{}", addr);
     let listener = TcpListener::bind(addr).await?;
     loop {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
         tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .serve_connection(io, service_fn(markdown))
+            if let Err(err) = Builder::new(TokioExecutor::new())
+                .serve_connection(io, service_fn(endpoints))
                 .await
             {
-                eprintln!("Error serving connection: {}", err);
+                log::error!("[run_server] error serving connection: {:?}", err);
             }
         });
     }
