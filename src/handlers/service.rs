@@ -13,17 +13,35 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
     match *req.method() {
         Method::POST => match uri {
             x if x.contains("write") => {
-                let data = req.into_body().collect().await?.to_bytes();
-                let result = aggregate_write_payload(data).await;
-                match result {
-                    Ok(_) => {
-                        *response.body_mut() =
-                            Full::from("[endpoints] document saved successfully\n");
+                let headers = req.headers();
+                let res_access = headers.get("unikernel-access");
+                match res_access {
+                    Some(access) => {
+                        let access_value = access.to_str().unwrap_or_default();
+                        if access_value.is_empty() || access_value != "valid" {
+                            *response.status_mut() = StatusCode::FORBIDDEN;
+                            *response.body_mut() = Full::from("[endpoints] : access forbidden");
+                        } else {
+                            let data = req.into_body().collect().await?.to_bytes();
+                            let result = aggregate_write_payload(data).await;
+                            match result {
+                                Ok(_) => {
+                                    *response.body_mut() =
+                                        Full::from("[endpoints] document saved successfully\n");
+                                }
+                                Err(e) => {
+                                    log::error!("[endpoints] {}", e);
+                                    *response.body_mut() =
+                                        Full::from(format!("[endpoints] {}\n", e));
+                                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                                }
+                            }
+                        }
                     }
-                    Err(e) => {
-                        log::error!("[endpoints] {}", e);
-                        *response.body_mut() = Full::from(format!("[endpoints] {}\n", e));
-                        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    None => {
+                        log::error!("[endpoints] access forbidden ");
+                        *response.status_mut() = StatusCode::FORBIDDEN;
+                        *response.body_mut() = Full::from("[endpoints] : access forbidden\n");
                     }
                 }
             }
