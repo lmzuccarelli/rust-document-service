@@ -2,10 +2,10 @@ use crate::MAP_LOOKUP;
 use custom_logger as log;
 use surrealkv::{Tree, TreeBuilder};
 
-pub fn get_opts() -> Result<Tree, Box<dyn std::error::Error>> {
+pub fn get_opts(id: String) -> Result<Tree, Box<dyn std::error::Error>> {
     let db_path = get_item("db_path")?;
     let tree = TreeBuilder::new()
-        .with_path(format!("{}/documents.kv", db_path).into())
+        .with_path(format!("{}/{}/documents.kv", db_path, id).into())
         .with_max_memtable_size(100 * 1024 * 1024)
         .with_block_size(4096)
         .with_level_count(1);

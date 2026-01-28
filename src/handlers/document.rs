@@ -22,10 +22,11 @@ impl DocumentformInterface for Document {
 }
 
 async fn db_upsert(id: String, data: String) -> Result<String, Box<dyn std::error::Error>> {
-    let tree = get_opts()?;
+    let db_key = id.split("-").nth(0).unwrap_or("");
+    let tree = get_opts(db_key.to_string())?;
     // start transaction
     let mut txn = tree.begin()?;
-    txn.set_durability(surrealkv::Durability::Immediate);
+    txn.set_durability(surrealkv::Durability::Eventual);
     txn.set(id.as_bytes(), data.as_bytes())?;
     // commit transaction
     txn.commit().await?;
@@ -34,12 +35,13 @@ async fn db_upsert(id: String, data: String) -> Result<String, Box<dyn std::erro
     Ok(msg)
 }
 
-async fn db_read(key: String) -> Result<String, Box<dyn std::error::Error>> {
-    let tree = get_opts()?;
+async fn db_read(id: String) -> Result<String, Box<dyn std::error::Error>> {
+    let db_key = id.split("-").nth(0).unwrap_or("");
+    let tree = get_opts(db_key.to_string())?;
     // start transaction
     let mut txn = tree.begin()?;
-    log::debug!("[db_read] key {}", key);
-    let result = txn.get(key.as_bytes())?;
+    log::debug!("[db_read] key {}", id);
+    let result = txn.get(id.as_bytes())?;
     // commit transaction
     txn.commit().await?;
     tree.close().await?;
@@ -51,12 +53,13 @@ async fn db_read(key: String) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 #[allow(unused)]
-async fn db_delete(db: String, key: String) -> Result<(), Box<dyn std::error::Error>> {
-    let tree = get_opts()?;
+async fn db_delete(db: String, id: String) -> Result<(), Box<dyn std::error::Error>> {
+    let db_key = id.split("-").nth(0).unwrap_or("");
+    let tree = get_opts(db_key.to_string())?;
     // start transaction
     let mut txn = tree.begin()?;
-    log::debug!("[db_read] key {}", key);
-    txn.delete(key.as_bytes())?;
+    log::debug!("[db_read] key {}", id);
+    txn.delete(id.as_bytes())?;
     // commit transaction
     txn.commit().await?;
     tree.close().await?;
