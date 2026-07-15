@@ -59,6 +59,20 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                     }
                 }
             }
+            x if x.contains("search") => {
+                let data = req.into_body().collect().await?.to_bytes();
+                let result = aggregate_list_payload(data).await;
+                match result {
+                    Ok(content) => {
+                        *response.body_mut() = Full::from(content);
+                    }
+                    Err(e) => {
+                        log::error!("[endpoints] {}", e);
+                        *response.body_mut() = Full::from(format!("[endpoints] {}\n", e));
+                        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
             &_ => {}
         },
         Method::GET => {
@@ -71,18 +85,27 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                         .collect()
                 })
                 .unwrap_or_default();
-            log::debug!("[endpoints] params {:?}", params);
-            let empty = &"".to_string();
-            let document = params.get("document").unwrap_or(empty);
-            let result = aggregate_read(document.to_string()).await;
-            match result {
-                Ok(content) => {
-                    *response.body_mut() = Full::from(content);
-                }
-                Err(e) => {
-                    log::error!("[endpoints] {}", e);
-                    *response.body_mut() = Full::from(format!("[endpoints] {}\n", e));
-                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            if params.is_empty() && req.uri().path().contains("/v1/health") {
+                let content = format!(
+                    r##"{{ "status":"ok", "appplication": "{}", "version": "{}" }}"##,
+                    env!("CARGO_PKG_NAME"),
+                    env!("CARGO_PKG_VERSION"),
+                );
+                *response.body_mut() = Full::from(content);
+            } else {
+                log::debug!("[endpoints] params {:?}", params);
+                let empty = &"".to_string();
+                let document = params.get("document").unwrap_or(empty);
+                let result = aggregate_read(document.to_string()).await;
+                match result {
+                    Ok(content) => {
+                        *response.body_mut() = Full::from(content);
+                    }
+                    Err(e) => {
+                        log::error!("[endpoints] {}", e);
+                        *response.body_mut() = Full::from(format!("[endpoints] {}\n", e));
+                        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    }
                 }
             }
         }
@@ -118,6 +141,19 @@ async fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::erro
         ));
     }
     let result = Document::get_document(document_name.to_string()).await?;
+    Ok(result)
+}
+
+async fn aggregate_list_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+    let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
+    let empty = "".to_string();
+    let search = &hm.get("search").unwrap_or(&empty);
+    if search.is_empty() {
+        return Err(Box::from(
+            "[aggregate_read_payload] json payload (document) is empty",
+        ));
+    }
+    let result = Document::search_document(search.to_string()).await?;
     Ok(result)
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "document-service"
-version = "0.1.6"
+version = "0.1.8"
 edition = "2024"
 authors = ["luigizuccarelli@gmail.com"]
 
@@ -21,7 +21,7 @@ custom-logger = { git = "https://github.com/lmzuccarelli/rust-custom-logger", br
 serde = "1.0.228"
 serde_derive = "1.0.228"
 serde_json = "1.0.149"
-surrealkv = "0.17.0"
+surrealkv = "0.21.2"
 url = "2.5.8"
 
 [profile.release]
