@@ -12,6 +12,11 @@ pub trait DocumentformInterface {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Document {}
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyResults {
+    keys: Vec<String>,
+}
+
 impl DocumentformInterface for Document {
     async fn save_document(key: String, data: String) -> Result<(), Box<dyn std::error::Error>> {
         db_upsert(key, data).await?;
@@ -36,7 +41,7 @@ async fn db_upsert(id: String, data: String) -> Result<String, Box<dyn std::erro
     // commit transaction
     txn.commit().await?;
     tree.close().await?;
-    let msg = format!("form data {} created/updated successfully", id);
+    let msg = format!("form data {} created/updated successfully\n", id);
     Ok(msg)
 }
 
@@ -50,7 +55,7 @@ async fn db_read(id: String) -> Result<String, Box<dyn std::error::Error>> {
     txn.commit().await?;
     tree.close().await?;
     let res = match result {
-        Some(value) => String::from_utf8(value.to_vec()).unwrap(),
+        Some(value) => format!("{}\n", String::from_utf8(value.to_vec())?),
         None => "".to_string(),
     };
     Ok(res)
@@ -58,7 +63,7 @@ async fn db_read(id: String) -> Result<String, Box<dyn std::error::Error>> {
 
 async fn db_search(category: String) -> Result<String, Box<dyn std::error::Error>> {
     let tree = get_opts()?;
-    let mut result = String::new();
+    let mut vec_keys = vec![];
     // start transaction
     let txn = tree.begin()?;
     log::debug!("[db_search] key (category) {}", category);
@@ -73,13 +78,17 @@ async fn db_search(category: String) -> Result<String, Box<dyn std::error::Error
     while it.valid() {
         let key = it.key();
         let key_val = String::from_utf8(key.user_key().to_vec())?;
-        result.push_str(&format!("{}\n", key_val));
+        vec_keys.push(key_val);
         it.next()?;
     }
     // commit transaction
     //txn.commit().await?;
     //tree.close().await?;
-    Ok(result)
+    let kr = KeyResults {
+        keys: vec_keys.clone(),
+    };
+    let result = serde_json::to_string(&kr)?;
+    Ok(format!("{}\n", result))
 }
 
 #[allow(unused)]
