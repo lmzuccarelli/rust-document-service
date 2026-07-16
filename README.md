@@ -8,17 +8,27 @@ A simple rust based markdown server
 clone the repo
 
 ```
-cd rust-markdown-server
+cd rust-document-service
 
 # compile
 
-make build
+make build-nonstatic
 ```
 
 execute 
 
 ```
-./target/release/rust-markdown-server
+./target/release/rust-document-service
+```
+
+To compile using static linked libraires
+
+```bash
+make build
+
+# if this fails try installing glibc-static
+# i.e for fedoar execute the following (other distros will differ)
+sudo dnf install glibc-static
 ```
 
 ## Storage notation
