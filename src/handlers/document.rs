@@ -4,7 +4,8 @@ use serde_derive::{Deserialize, Serialize};
 use surrealkv::{LSMIterator, ReadOptions};
 
 pub trait DocumentformInterface {
-    async fn save_document(key: String, data: String) -> Result<(), Box<dyn std::error::Error>>;
+    async fn save_document(key: String, data: String)
+    -> Result<String, Box<dyn std::error::Error>>;
     async fn get_document(key: String) -> Result<String, Box<dyn std::error::Error>>;
     async fn search_document(search: String) -> Result<String, Box<dyn std::error::Error>>;
 }
@@ -13,14 +14,17 @@ pub trait DocumentformInterface {
 pub struct Document {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KeyResults {
-    keys: Vec<String>,
+pub struct KeyResponse {
+    content: Vec<String>,
 }
 
 impl DocumentformInterface for Document {
-    async fn save_document(key: String, data: String) -> Result<(), Box<dyn std::error::Error>> {
-        db_upsert(key, data).await?;
-        Ok(())
+    async fn save_document(
+        key: String,
+        data: String,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let res = db_upsert(key, data).await?;
+        Ok(res)
     }
     async fn get_document(key: String) -> Result<String, Box<dyn std::error::Error>> {
         let res = db_read(key).await?;
@@ -41,8 +45,12 @@ async fn db_upsert(id: String, data: String) -> Result<String, Box<dyn std::erro
     // commit transaction
     txn.commit().await?;
     tree.close().await?;
-    let msg = format!("form data {} created/updated successfully\n", id);
-    Ok(msg)
+    // real lazy way creating json response
+    let content = format!(
+        r##"{{ "content": "form data {} created/updated successfully" }}"##,
+        id
+    );
+    Ok(format!("{}\n", content))
 }
 
 async fn db_read(id: String) -> Result<String, Box<dyn std::error::Error>> {
@@ -55,10 +63,11 @@ async fn db_read(id: String) -> Result<String, Box<dyn std::error::Error>> {
     txn.commit().await?;
     tree.close().await?;
     let res = match result {
-        Some(value) => format!("{}\n", String::from_utf8(value.to_vec())?),
+        Some(value) => String::from_utf8(value.to_vec())?,
         None => "".to_string(),
     };
-    Ok(res)
+    let content = format!(r#"{{ "content": "{}" }}"#, res);
+    Ok(format!("{}\n", content))
 }
 
 async fn db_search(category: String) -> Result<String, Box<dyn std::error::Error>> {
@@ -81,11 +90,11 @@ async fn db_search(category: String) -> Result<String, Box<dyn std::error::Error
         vec_keys.push(key_val);
         it.next()?;
     }
-    // commit transaction
+    // TODO: commit transaction
     //txn.commit().await?;
     //tree.close().await?;
-    let kr = KeyResults {
-        keys: vec_keys.clone(),
+    let kr = KeyResponse {
+        content: vec_keys.clone(),
     };
     let result = serde_json::to_string(&kr)?;
     Ok(format!("{}\n", result))

@@ -25,9 +25,8 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                             let data = req.into_body().collect().await?.to_bytes();
                             let result = aggregate_write_payload(data).await;
                             match result {
-                                Ok(_) => {
-                                    *response.body_mut() =
-                                        Full::from("[endpoints] document saved successfully\n");
+                                Ok(content) => {
+                                    *response.body_mut() = Full::from(content);
                                 }
                                 Err(e) => {
                                     log::error!("[endpoints] {}", e);
@@ -117,7 +116,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
     Ok(response)
 }
 
-async fn aggregate_write_payload(data: Bytes) -> Result<(), Box<dyn std::error::Error>> {
+async fn aggregate_write_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
     let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
     let empty = "".to_string();
     let document_name = &hm.get("document").unwrap_or(&empty);
@@ -127,8 +126,8 @@ async fn aggregate_write_payload(data: Bytes) -> Result<(), Box<dyn std::error::
             "[aggregate_write_payload] json payload (document && content) are empty",
         ));
     }
-    Document::save_document(document_name.to_string(), content.to_string()).await?;
-    Ok(())
+    let result = Document::save_document(document_name.to_string(), content.to_string()).await?;
+    Ok(result)
 }
 
 async fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {

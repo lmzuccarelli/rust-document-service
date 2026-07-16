@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "document-service"
-version = "0.1.9"
+version = "0.1.11"
 dependencies = [
  "custom-logger",
  "futures-util",
