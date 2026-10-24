@@ -14,7 +14,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
         Method::POST => match uri {
             x if x.contains("write") => {
                 let headers = req.headers();
-                let res_access = headers.get("unikernel-access");
+                let res_access = headers.get("document-access");
                 match res_access {
                     Some(access) => {
                         let access_value = access.to_str().unwrap_or_default();
@@ -23,7 +23,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                             *response.body_mut() = Full::from("[endpoints] : access forbidden");
                         } else {
                             let data = req.into_body().collect().await?.to_bytes();
-                            let result = aggregate_write_payload(data).await;
+                            let result = aggregate_write_payload(data);
                             match result {
                                 Ok(content) => {
                                     *response.body_mut() = Full::from(content);
@@ -46,7 +46,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
             }
             x if x.contains("read") => {
                 let data = req.into_body().collect().await?.to_bytes();
-                let result = aggregate_read_payload(data).await;
+                let result = aggregate_read_payload(data);
                 match result {
                     Ok(content) => {
                         *response.body_mut() = Full::from(content);
@@ -60,7 +60,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
             }
             x if x.contains("search") => {
                 let data = req.into_body().collect().await?.to_bytes();
-                let result = aggregate_list_payload(data).await;
+                let result = aggregate_list_payload(data);
                 match result {
                     Ok(content) => {
                         *response.body_mut() = Full::from(content);
@@ -95,7 +95,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                 log::debug!("[endpoints] params {:?}", params);
                 let empty = &"".to_string();
                 let document = params.get("document").unwrap_or(empty);
-                let result = aggregate_read(document.to_string()).await;
+                let result = aggregate_read(document.to_string());
                 match result {
                     Ok(content) => {
                         *response.body_mut() = Full::from(content);
@@ -116,7 +116,7 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
     Ok(response)
 }
 
-async fn aggregate_write_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+fn aggregate_write_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
     let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
     let empty = "".to_string();
     let document_name = &hm.get("document").unwrap_or(&empty);
@@ -126,11 +126,11 @@ async fn aggregate_write_payload(data: Bytes) -> Result<String, Box<dyn std::err
             "[aggregate_write_payload] json payload (document && content) are empty",
         ));
     }
-    let result = Document::save_document(document_name.to_string(), content.to_string()).await?;
-    Ok(result)
+    Document::save_document(document_name.to_string(), content.to_string())?;
+    Ok("document saved successfully".to_string())
 }
 
-async fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
     let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
     let empty = "".to_string();
     let document_name = &hm.get("document").unwrap_or(&empty);
@@ -139,27 +139,27 @@ async fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::erro
             "[aggregate_read_payload] json payload (document) is empty",
         ));
     }
-    let result = Document::get_document(document_name.to_string()).await?;
+    let result = Document::get_document(document_name.to_string())?;
     Ok(result)
 }
 
-async fn aggregate_list_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+fn aggregate_list_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
     let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
     let empty = "".to_string();
-    let search = &hm.get("search").unwrap_or(&empty);
+    let search = &hm.get("directory").unwrap_or(&empty);
     if search.is_empty() {
         return Err(Box::from(
-            "[aggregate_read_payload] json payload (document) is empty",
+            "[aggregate_list_payload] json payload (document) is empty",
         ));
     }
-    let result = Document::search_document(search.to_string()).await?;
+    let result = Document::search_document(search.to_string())?;
     Ok(result)
 }
 
-async fn aggregate_read(document: String) -> Result<String, Box<dyn std::error::Error>> {
+fn aggregate_read(document: String) -> Result<String, Box<dyn std::error::Error>> {
     if document.is_empty() {
         return Err(Box::from("parameter document is empty"));
     }
-    let result = Document::get_document(document).await?;
+    let result = Document::get_document(document)?;
     Ok(result)
 }

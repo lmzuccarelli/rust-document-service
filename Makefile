@@ -1,11 +1,11 @@
-.PHONY: all clean-all build build-nonstatic
+.PHONY: all clean-all build build-static
 
 all: clean-all build 
 
-build:
+build-static:
 	RUSTFLAGS="-C target-feature=+crt-static -Clink-arg=-fuse-ld=lld" cargo build --target x86_64-unknown-linux-gnu --release --verbose
 
-build-nonstatic:
+build:
 	cargo build --release
 
 verify:

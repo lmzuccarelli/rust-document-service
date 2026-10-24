@@ -1,14 +1,11 @@
 use crate::config::load::{ConfigInterface, ImplConfigInterface};
 use crate::handlers::service::endpoints;
 use custom_logger as log;
-// use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
 use mimalloc::MiMalloc;
-use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::Mutex;
 use tokio::net::TcpListener;
 
 mod config;
@@ -16,9 +13,6 @@ mod handlers;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-
-// used for lookup in read mode only
-static MAP_LOOKUP: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
 fn main() {
     // read and parse config
@@ -46,11 +40,6 @@ fn main() {
         eprintln!("[main] error {}", e);
         std::process::exit(1);
     }
-
-    // parameters used in service
-    let mut hm: HashMap<String, String> = HashMap::new();
-    hm.insert("db_path".to_owned(), parameters.db_path.to_owned());
-    *MAP_LOOKUP.lock().unwrap() = Some(hm.clone());
 
     log::info!("application : {}", env!("CARGO_PKG_NAME"));
     log::info!("author      : {}", env!("CARGO_PKG_AUTHORS"));
