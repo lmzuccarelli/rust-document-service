@@ -58,9 +58,23 @@ pub async fn endpoints(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, 
                     }
                 }
             }
-            x if x.contains("search") => {
+            x if x.contains("search-folder") => {
                 let data = req.into_body().collect().await?.to_bytes();
-                let result = aggregate_list_payload(data);
+                let result = aggregate_list_folder(data);
+                match result {
+                    Ok(content) => {
+                        *response.body_mut() = Full::from(content);
+                    }
+                    Err(e) => {
+                        log::error!("[endpoints] {}", e);
+                        *response.body_mut() = Full::from(format!("[endpoints] {}\n", e));
+                        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
+            x if x.contains("regex") => {
+                let data = req.into_body().collect().await?.to_bytes();
+                let result = aggregate_regex_search(data);
                 match result {
                     Ok(content) => {
                         *response.body_mut() = Full::from(content);
@@ -143,16 +157,30 @@ fn aggregate_read_payload(data: Bytes) -> Result<String, Box<dyn std::error::Err
     Ok(result)
 }
 
-fn aggregate_list_payload(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+fn aggregate_list_folder(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
     let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
     let empty = "".to_string();
-    let search = &hm.get("directory").unwrap_or(&empty);
-    if search.is_empty() {
+    let folder = &hm.get("search-folder").unwrap_or(&empty);
+    if folder.is_empty() {
         return Err(Box::from(
-            "[aggregate_list_payload] json payload (document) is empty",
+            "[aggregate_list_folder] json payload (folder field) is empty",
         ));
     }
-    let result = Document::search_document(search.to_string())?;
+    let result = Document::search_folder(folder.to_string())?;
+    Ok(result)
+}
+
+fn aggregate_regex_search(data: Bytes) -> Result<String, Box<dyn std::error::Error>> {
+    let hm: HashMap<String, String> = serde_json::from_slice(&data)?;
+    let empty = "".to_string();
+    let folder = &hm.get("search-folder").unwrap_or(&empty);
+    let pattern = &hm.get("pattern").unwrap_or(&empty);
+    if folder.is_empty() || pattern.is_empty() {
+        return Err(Box::from(
+            "[aggregate_regex_search] json payload (folder/pattern field/s) is/are empty",
+        ));
+    }
+    let result = Document::regex_search_documents(folder.to_string(), pattern)?;
     Ok(result)
 }
 

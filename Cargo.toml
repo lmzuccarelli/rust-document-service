@@ -1,26 +1,23 @@
 [package]
 name = "document-service"
-version = "0.1.12"
+version = "0.1.14"
 edition = "2024"
 authors = ["luigizuccarelli@gmail.com"]
 
 [dependencies]
-futures-util = "0.3.31"
 http = "1.4.0"
 http-body = "1.0.1"
 http-body-util =  "0.1.3" 
 hyper = "1.8.1"
 hyper-util = { version = "0.1.19", default-features = false, features = ["tokio","server-auto"] }
-ipnetwork = "0.21.1"
-rtnetlink = "0.19.0"
 tokio = {version = "1.48.0", features = ["full"] }
 mimalloc = { version = "*", features = ["v3"] }
-reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
 custom-logger = { git = "https://github.com/lmzuccarelli/rust-custom-logger", branch = "main", version = "0.2.0" }
 serde = "1.0.228"
 serde_derive = "1.0.228"
 serde_json = "1.0.149"
 url = "2.5.8"
+regex = "1.13.1"
 
 [profile.release]
 strip = true      # Strip symbols from the binary

@@ -44,6 +44,7 @@ fn main() {
     log::info!("application : {}", env!("CARGO_PKG_NAME"));
     log::info!("author      : {}", env!("CARGO_PKG_AUTHORS"));
     log::info!("version     : {}", env!("CARGO_PKG_VERSION"));
+    log::info!("port        : {}", parameters.server_port);
 
     let result = run_server(parameters.server_port);
     match result {
