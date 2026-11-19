@@ -22,7 +22,7 @@ fn main() {
     let parameters = match res_params {
         Ok(params) => params,
         Err(e) => {
-            log::error!("{:?}", e.to_string());
+            eprintln!("{:?}", e.to_string());
             std::process::exit(1);
         }
     };

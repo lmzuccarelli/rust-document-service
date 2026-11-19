@@ -1,0 +1,7 @@
+{
+	"name": "document-service",
+	"description": "A simple markdown/json document store and retrieval service written in Rust",
+	"log_level": "info",
+	"db_path": "/home/lzuccarelli/database/v1",
+	"server_port": 8080
+}
